@@ -56,7 +56,7 @@ DATABASE_URL=your_postgres_connection_string
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/henrik392/youtube-voice-go.git
+   git clone https://github.com/henrikkvamme/youtube-voice-go.git
    cd youtube-voice-go
    ```
 

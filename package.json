@@ -11,15 +11,15 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/henrik392/youtube-voice-go.git"
+    "url": "git+https://github.com/henrikkvamme/youtube-voice-go.git"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "bugs": {
-    "url": "https://github.com/henrik392/youtube-voice-go/issues"
+    "url": "https://github.com/henrikkvamme/youtube-voice-go/issues"
   },
-  "homepage": "https://github.com/henrik392/youtube-voice-go#readme",
+  "homepage": "https://github.com/henrikkvamme/youtube-voice-go#readme",
   "devDependencies": {
     "tailwindcss": "^3.4.17"
   }
