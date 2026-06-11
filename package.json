@@ -21,6 +21,6 @@
   },
   "homepage": "https://github.com/henrikkvamme/youtube-voice-go#readme",
   "devDependencies": {
-    "tailwindcss": "^3.4.17"
+    "tailwindcss": "^4.3.0"
   }
 }
