@@ -1,35 +1,93 @@
 name: Dependabot auto-merge
 
 on:
+  schedule:
+    - cron: "23 */6 * * *"
+  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
 permissions:
   contents: write
   pull-requests: write
-  issues: write
+  checks: read
+
+concurrency:
+  group: dependabot-auto-merge
+  cancel-in-progress: false
 
 jobs:
-  dependabot:
-    name: Enable low-risk Dependabot auto-merge
+  merge-safe-updates:
+    name: Merge safe Dependabot updates after checks pass
     runs-on: ubuntu-latest
     if: >
-      github.event.pull_request.user.login == 'dependabot[bot]' &&
-      github.event.pull_request.draft == false
+      github.event_name != 'pull_request' ||
+      (
+        github.event.pull_request.user.login == 'dependabot[bot]' &&
+        github.event.pull_request.draft == false
+      )
     steps:
-      - name: Fetch Dependabot metadata
-        id: metadata
-        uses: dependabot/fetch-metadata@d7267f607e9d3fb96fc2fbe83e0af444713e90b7
-        with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Enable auto-merge for minor and patch updates
-        if: >
-          contains(
-            fromJSON('["version-update:semver-patch","version-update:semver-minor"]'),
-            steps.metadata.outputs.update-type
-          )
-        run: gh pr merge --auto --squash "$PR_URL"
+      - name: Merge safe Dependabot PRs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          is_safe_update() {
+            local title="$1"
+            local lower
+            lower="$(printf '%s' "$title" | tr '[:upper:]' '[:lower:]')"
+
+            if [[ "$lower" == *"minor-and-patch group"* || "$lower" == *"go-minor-and-patch group"* ]]; then
+              return 0
+            fi
+
+            if [[ "$title" =~ [Ff]rom[[:space:]]+v?([0-9]+)(\.[0-9]+){0,3}[[:space:]]+to[[:space:]]+v?([0-9]+)(\.[0-9]+){0,3} ]]; then
+              [[ "${BASH_REMATCH[1]}" == "${BASH_REMATCH[3]}" ]]
+              return
+            fi
+
+            return 1
+          }
+
+          while IFS= read -r encoded; do
+            pr="$(printf '%s' "$encoded" | base64 --decode)"
+            number="$(jq -r '.number' <<< "$pr")"
+            title="$(jq -r '.title' <<< "$pr")"
+            draft="$(jq -r '.isDraft' <<< "$pr")"
+
+            if [[ "$draft" == "true" ]]; then
+              echo "Skipping #$number: draft"
+              continue
+            fi
+
+            if ! is_safe_update "$title"; then
+              echo "Skipping #$number: not clearly minor/patch"
+              continue
+            fi
+
+            checks="$(gh pr checks "$number" --json name,state,bucket 2>/dev/null || echo '[]')"
+            total="$(jq 'length' <<< "$checks")"
+            if [[ "$total" -eq 0 ]]; then
+              echo "Skipping #$number: no checks reported"
+              continue
+            fi
+
+            failing="$(jq '[.[] | select(.bucket == "fail" or .bucket == "cancel")] | length' <<< "$checks")"
+            pending="$(jq '[.[] | select(.bucket == "pending")] | length' <<< "$checks")"
+
+            if [[ "$failing" -gt 0 ]]; then
+              echo "Skipping #$number: failing checks"
+              continue
+            fi
+
+            if [[ "$pending" -gt 0 ]]; then
+              echo "Skipping #$number: pending checks"
+              continue
+            fi
+
+            echo "Merging #$number: $title"
+            gh pr merge "$number" --squash --delete-branch
+          done < <(gh pr list --state open --author "app/dependabot" --json number,title,isDraft --jq '.[] | @base64')
