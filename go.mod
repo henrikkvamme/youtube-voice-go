@@ -1,6 +1,6 @@
 module github.com/henrik392/youtube-voice-go
 
-go 1.25.0
+go 1.25.11
 
 require (
 	github.com/a-h/templ v0.3.924
